@@ -1,5 +1,6 @@
 mod cli;
 mod passes;
+mod files;
 
 use passes::Passes;
 use cli::Args;

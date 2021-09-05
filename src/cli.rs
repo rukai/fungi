@@ -33,6 +33,28 @@ impl Args {
             else if arg == "--hash-style=gnu" {
                 // TODO
             }
+            else if arg == "-dynamic-linker" {
+                // TODO
+                args.next();
+            }
+            else if arg == "-znoexecstack" {
+                // TODO
+            }
+            else if arg == "-zrelno" {
+                // TODO
+            }
+            else if arg == "-znow" {
+                // TODO
+            }
+            else if arg == "--gc-sections" {
+                // TODO
+            }
+            else if arg.starts_with("-L") {
+                // TODO
+            }
+            else if arg.starts_with("-l") {
+                // TODO
+            }
             else if arg == "-m" {
                 match args.next().unwrap().as_str() {
                     "elf_x86_64" => result.emulation = Emulation::X86_64,
