@@ -17,40 +17,34 @@ const ELF_TYPE_DYN: u16 = 3;
 
 pub fn load_files(files: &[String]) -> Vec<FileType> {
     files.par_iter().map(|name| {
-        let contents = std::fs::read(name).unwrap();
-        if contents.len() >= 20 && &contents[..4] == "\x7FELF".as_bytes() {
-            match (&contents[16..18]).read_u16::<BigEndian>().unwrap() {
+        let data = std::fs::read(name).unwrap();
+        if data.len() >= 20 && data.starts_with("\x7FELF".as_bytes()) {
+            match (&data[16..18]).read_u16::<BigEndian>().unwrap() {
                 ELF_TYPE_NONE => unimplemented!("none elf type"),
                 ELF_TYPE_REL => FileType::Obj(ObjFile {
-                    contents
+                    data
                 }),
                 ELF_TYPE_EXEC => unimplemented!("exec elf type"),
                 ELF_TYPE_DYN => FileType::Dso(DsoFile {
-                    contents
+                    data
                 }),
                 _ => unimplemented!("Unknown ELF type")
             }
         }
-        else if contents.len() >= 8 && &contents[..8] == "!<arch>\n".as_bytes() {
-            FileType::Ar(ArFile {
-                dsos: vec!(),
-                objs: vec!(),
-            })
+        else if data.len() >= 8 && data.starts_with("!<arch>\n".as_bytes()) {
+            parse_fat_ar(&data)
         }
-        else if contents.len() >= 8 && &contents[..8] == "!<thin>\n".as_bytes() {
-            FileType::ThinAr(ThinArFile {
-                dsos: vec!(),
-                objs: vec!(),
-            })
+        else if data.len() >= 8 && data.starts_with("!<thin>\n".as_bytes()) {
+            parse_thin_ar(&data)
         }
-        else if contents.len() >= 4 && (&contents[..8] == [0xDE, 0xC0, 0x17, 0x0B] || &contents[..8] == &[0x42, 0x43, 0xC0, 0xDE]) {
+        else if data.len() >= 4 && (data.starts_with(&[0xDE, 0xC0, 0x17, 0x0B]) || data.starts_with(&[0x42, 0x43, 0xC0, 0xDE])) {
             FileType::LLVMBitcode(LLVMBitcodeFile {
-                contents
+                data
             })
         }
-        else if contents[..4].iter().all(|x| x.is_ascii() && !x.is_ascii_control()) {
+        else if data[..4].iter().all(|x| x.is_ascii() && !x.is_ascii_control()) {
             FileType::Text(TextFile {
-                contents
+                data
             })
         }
         else {
@@ -59,14 +53,73 @@ pub fn load_files(files: &[String]) -> Vec<FileType> {
     }).collect()
 }
 
+fn parse_thin_ar(data: &[u8]) -> FileType {
+    const AR_HEADER_LENGTH: usize = 60;
+    let mut header_index = 8;
+    let mut string_table_index = usize::MAX;
+    while header_index + 2 < data.len() {
+        // Each header is aligned to a 2 byte boundary.
+        if header_index % 2 == 1 {
+            header_index += 1;
+        }
+
+        let header = &data[header_index..AR_HEADER_LENGTH];
+        let header_name = &header[..16];
+        let header_size = &header[48..58];
+
+        // TODO: Surely I can skip the utf8 check here?
+        // TODO: atol actually ignores any non numeric characters, is that important here?
+        let size: usize = std::str::from_utf8(header_size).unwrap().parse().unwrap();
+
+        // Read a string table.
+        if header_name.starts_with("// ".as_bytes()) {
+            string_table_index = header_index;
+            header_index += AR_HEADER_LENGTH + size;
+            continue;
+        }
+
+        // Skip a symbol table.
+        if header_name.starts_with("/ ".as_bytes()) {
+            header_index += AR_HEADER_LENGTH + size;
+            continue;
+        }
+
+        if header_name[0] != '/' as u8 {
+            panic!("Filename is not stored as a long filename: {:?}", header_name)
+        }
+
+        // TODO: Surely I can skip the utf8 check here?
+        let string_table_offset: usize = std::str::from_utf8(&header_name[1..]).unwrap().parse().unwrap();
+
+        // TODO: Surely I can skip the utf8 check here?
+        let string = std::str::from_utf8(&data[string_table_index + string_table_offset..todo!()]).unwrap().to_string();
+
+        let body_index = header_index + AR_HEADER_LENGTH;
+
+        // TODO: strstr time
+    }
+
+    FileType::ThinAr(ThinArFile {
+        dsos: vec!(),
+        objs: vec!(),
+    })
+}
+
+fn parse_fat_ar(_data: &[u8]) -> FileType {
+    FileType::Ar(ArFile {
+        dsos: vec!(),
+        objs: vec!(),
+    })
+}
+
 #[derive(Debug)]
 pub struct ObjFile {
-    contents: Vec<u8>
+    data: Vec<u8>
 }
 
 #[derive(Debug)]
 pub struct DsoFile {
-    contents: Vec<u8>
+    data: Vec<u8>
 }
 
 pub struct ArFile {
@@ -81,10 +134,10 @@ pub struct ThinArFile {
 
 #[derive(Debug)]
 pub struct TextFile {
-    contents: Vec<u8>
+    data: Vec<u8>
 }
 
 #[derive(Debug)]
 pub struct LLVMBitcodeFile {
-    contents: Vec<u8>
+    data: Vec<u8>
 }
