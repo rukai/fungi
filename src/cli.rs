@@ -24,6 +24,9 @@ impl Args {
             if arg == "--help" || arg == "-help" {
                 println!("Halp!")
             }
+            if arg == "--start-group" || arg == "--end-group" {
+                // Ignored
+            }
             else if arg == "--build-id" {
                 // TODO
             }
@@ -40,7 +43,7 @@ impl Args {
             else if arg == "-znoexecstack" {
                 // TODO
             }
-            else if arg == "-zrelno" {
+            else if arg == "-zrelro" {
                 // TODO
             }
             else if arg == "-znow" {
@@ -55,6 +58,9 @@ impl Args {
             else if arg.starts_with("-l") {
                 // TODO
             }
+            else if arg == "-o" {
+                // TODO
+            }
             else if arg == "-m" {
                 match args.next().unwrap().as_str() {
                     "elf_x86_64" => result.emulation = Emulation::X86_64,
@@ -66,7 +72,7 @@ impl Args {
             else if arg == "-pie" {
                 result.pie  = true;
             }
-            else if arg == "-BStatic" {
+            else if arg == "-Bstatic" {
                 result.statik = true;
             }
             else if arg == "-Bdynamic" {
